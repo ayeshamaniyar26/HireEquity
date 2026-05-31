@@ -1,6 +1,6 @@
 # HireEquity 
 ### AI-Powered Job Description Generator & Bias Auditor
-> *"Bad JD in. Good JD out."*
+
 
 [![Streamlit](https://img.shields.io/badge/Built%20with-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit)](https://streamlit.io)
 [![Groq](https://img.shields.io/badge/LLM-Groq%20Llama%203.1-orange?style=for-the-badge)](https://console.groq.com)
