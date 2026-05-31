@@ -1,6 +1,5 @@
 # HireEquity — AI Powered Job Description Generator and Bias Auditor
 
-> **Bad JD in, Good JD out**
 
 HireEquity is a professional, AI-powered tool designed to audit, optimize, and generate inclusive job descriptions (JDs). It helps organizations expand their talent pool by eliminating subtle language biases—including gender bias, ageism, ableism, elitism, and overly restrictive qualifications.
 
@@ -120,7 +119,7 @@ HireEquity/
 |---|---|
 | ![Page 1 Placeholder](https://via.placeholder.com/600x400.png?text=Step+1:+Provide+Job+Description) | ![Page 2 Placeholder](https://via.placeholder.com/600x400.png?text=Step+2:+Bias+Audit+Scanner) |
 
-| Page 3: Comparison & PDF | Page 4: Insights |
+| Page 3: Auto Fix and Compare| Page 4: Insights |
 |---|---|
 | ![Page 3 Placeholder](https://via.placeholder.com/600x400.png?text=Step+3:+AI+Auto-Rewrite) | ![Page 4 Placeholder](https://via.placeholder.com/600x400.png?text=Step+4:+Insights+Dashboard) |
 
