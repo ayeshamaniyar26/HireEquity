@@ -258,8 +258,103 @@ class ApiHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(response_data).encode('utf-8'))
 
 # =============================================================================
-# SERVER INITIATION GLUE
+# SERVER INITIATION GLUE (With Tornado Web Server Integration & Thread Fallback)
 # =============================================================================
+import tornado.web
+
+class BaseApiHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "x-requested-with, Content-Type")
+        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        
+    def options(self):
+        self.set_status(204)
+        self.finish()
+
+class CheckKeyHandler(BaseApiHandler):
+    def post(self):
+        api_key = os.environ.get("GROQ_API_KEY", "")
+        self.write({"api_key_configured": len(api_key.strip()) > 0})
+
+class GenerateHandler(BaseApiHandler):
+    def post(self):
+        try:
+            payload = json.loads(self.request.body)
+            role = payload.get("role", "")
+            level = payload.get("level", "Mid")
+            domain = payload.get("domain", "Tech")
+            jd_text = generate_job_description(role, level, domain)
+            self.write({"jd": jd_text})
+        except Exception as e:
+            self.set_status(500)
+            self.write({"error": str(e)})
+
+class AuditHandler(BaseApiHandler):
+    def post(self):
+        try:
+            payload = json.loads(self.request.body)
+            jd = payload.get("jd", "")
+            wordlist_flags = scan_wordlist_bias(jd)
+            api_key = os.environ.get("GROQ_API_KEY", "")
+            semantic_flags = []
+            if len(api_key.strip()) > 0:
+                semantic_flags = check_semantic_bias(jd)
+            all_flags = combine_and_align_flags(jd, wordlist_flags, semantic_flags)
+            score = calculate_score(all_flags)
+            self.write({"score": score, "flagged_items": all_flags})
+        except Exception as e:
+            self.set_status(500)
+            self.write({"error": str(e)})
+
+class RewriteHandler(BaseApiHandler):
+    def post(self):
+        try:
+            payload = json.loads(self.request.body)
+            jd = payload.get("jd", "")
+            flagged_items = payload.get("flagged_items", [])
+            style = payload.get("style", "Inclusive")
+            fixed_jd = rewrite_job_description(jd, flagged_items, style=style)
+            self.write({"fixed_jd": fixed_jd})
+        except Exception as e:
+            self.set_status(500)
+            self.write({"error": str(e)})
+
+class PdfHandler(BaseApiHandler):
+    def post(self):
+        try:
+            payload = json.loads(self.request.body)
+            metadata = payload.get("metadata", {})
+            original_score = payload.get("original_score", 100)
+            fixed_score = payload.get("fixed_score", 100)
+            flagged_items = payload.get("flagged_items", [])
+            original_jd = payload.get("original_jd", "")
+            fixed_jd = payload.get("fixed_jd", "")
+            pdf_bytes = generate_pdf_report(
+                metadata=metadata,
+                original_score=original_score,
+                fixed_score=fixed_score,
+                flagged_items=flagged_items,
+                original_jd=original_jd,
+                fixed_jd=fixed_jd
+            )
+            pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+            self.write({"pdf_base64": pdf_base64})
+        except Exception as e:
+            self.set_status(500)
+            self.write({"error": str(e)})
+
+class SimulateHandler(BaseApiHandler):
+    def post(self):
+        try:
+            payload = json.loads(self.request.body)
+            jd = payload.get("jd", "")
+            simulations = simulate_candidate_personas(jd)
+            self.write(simulations)
+        except Exception as e:
+            self.set_status(500)
+            self.write({"error": str(e)})
+
 def find_free_port(start_port=8585):
     port = start_port
     while port < 8600:
@@ -278,7 +373,24 @@ def run_server_thread(port):
     except Exception as e:
         logger.error(f"Failed to start API server: {e}")
 
-# If background thread has not been started, spawn it once!
+# Try to register custom API routes inside Streamlit's active Tornado application
+try:
+    from streamlit.web.server.server import Server
+    streamlit_server = Server.get_current()
+    if streamlit_server and streamlit_server._tornado_app:
+        streamlit_server._tornado_app.add_handlers(r".*", [
+            (r"/api/check_key", CheckKeyHandler),
+            (r"/api/generate", GenerateHandler),
+            (r"/api/audit", AuditHandler),
+            (r"/api/rewrite", RewriteHandler),
+            (r"/api/pdf", PdfHandler),
+            (r"/api/simulate", SimulateHandler)
+        ])
+        logger.info("Successfully registered custom Tornado API routes in Streamlit server.")
+except Exception as e:
+    logger.error(f"Failed to bind custom Tornado API handlers to Streamlit server: {e}")
+
+# If background thread has not been started, spawn it as fallback once!
 if not globals()['_server_started']:
     free_port = find_free_port(8585)
     globals()['_server_port'] = free_port
@@ -286,7 +398,8 @@ if not globals()['_server_started']:
     server_thread = threading.Thread(target=run_server_thread, args=(free_port,), daemon=True)
     server_thread.start()
     globals()['_server_started'] = True
-    logger.info(f"Background API Server started on http://localhost:{free_port}")
+    logger.info(f"Background API Server fallback started on http://localhost:{free_port}")
+
 
 # =============================================================================
 # STREAMLIT MOUNTING AND VIEWPORT OVERRIDES

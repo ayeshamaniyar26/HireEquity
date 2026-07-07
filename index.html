@@ -1414,6 +1414,10 @@
   <script>
     // Dynamic API port injected by backend
     const API_PORT = 8585;
+    let apiBaseUrl = window.location.origin;
+    function getApiUrl(endpoint) {
+      return `${apiBaseUrl}${endpoint}`;
+    }
 
     // State management
     const state = {
@@ -1494,31 +1498,58 @@
       const ping = document.getElementById('engine-ping');
       const text = document.getElementById('engine-text');
 
-      fetch(`http://localhost:${API_PORT}/api/check_key`, {
+      // First try relative path (Tornado integrated)
+      const primaryUrl = `${window.location.origin}/api/check_key`;
+      
+      fetch(primaryUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       })
-      .then(res => res.json())
-      .then(data => {
-        state.apiKeyConfigured = data.api_key_configured;
-        if (data.api_key_configured) {
-          dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
-          ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400';
-          text.innerText = 'Groq Engine Connected';
-          showToast('Groq Cloud API connection initialized.', 'success');
-        } else {
-          dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
-          ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-amber-400';
-          text.innerText = 'Local Scan Mode';
-          showToast('No API key found in .env. Running in offline wordlist matching mode.', 'info');
-        }
+      .then(res => {
+        if (!res.ok) throw new Error();
+        return res.json();
       })
-      .catch(err => {
-        dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-rose-500';
-        ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-rose-400';
-        text.innerText = 'Connection Offline';
-        showToast('Cannot connect to local Python API server.', 'error');
+      .then(data => {
+        apiBaseUrl = window.location.origin;
+        handleConnectionSuccess(data, dot, ping, text);
+      })
+      .catch(() => {
+        // Fallback to port 8585
+        const fallbackUrl = `http://localhost:8585/api/check_key`;
+        fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        .then(res => {
+          if (!res.ok) throw new Error();
+          return res.json();
+        })
+        .then(data => {
+          apiBaseUrl = `http://localhost:8585`;
+          handleConnectionSuccess(data, dot, ping, text);
+        })
+        .catch(() => {
+          dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-rose-500';
+          if (ping) ping.className = 'absolute inline-flex h-full w-full rounded-full opacity-75 bg-rose-400';
+          text.innerText = 'Connection Offline';
+          showToast('Cannot connect to local Python API server.', 'error');
+        });
       });
+    }
+
+    function handleConnectionSuccess(data, dot, ping, text) {
+      state.apiKeyConfigured = data.api_key_configured;
+      if (data.api_key_configured) {
+        dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+        if (ping) ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400';
+        text.innerText = 'Groq Engine Connected';
+        showToast('Groq Cloud API connection initialized.', 'success');
+      } else {
+        dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+        if (ping) ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-amber-400';
+        text.innerText = 'Local Scan Mode';
+        showToast('No API key found. Running in offline wordlist matching mode.', 'info');
+      }
     }
 
 
@@ -1621,7 +1652,7 @@
       
       setLoader(true, `AI writing job description for ${role}...`);
       
-      fetch(`http://localhost:${API_PORT}/api/generate`, {
+      fetch(getApiUrl('/api/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role, level, domain })
@@ -1698,7 +1729,7 @@
       
       setLoader(true, 'Running Dual-Engine Bias Scanner...');
       
-      fetch(`http://localhost:${API_PORT}/api/audit`, {
+      fetch(getApiUrl('/api/audit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jd: text })
@@ -1899,7 +1930,7 @@
       
       setLoader(true, `AI optimizing JD in ${state.rewriteStyle} tone...`);
       
-      fetch(`http://localhost:${API_PORT}/api/rewrite`, {
+      fetch(getApiUrl('/api/rewrite'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1917,7 +1948,7 @@
         state.fixedJd = data.fixed_jd;
         
         // Scan the rewritten text to verify optimized score
-        return fetch(`http://localhost:${API_PORT}/api/audit`, {
+        return fetch(getApiUrl('/api/audit'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ jd: data.fixed_jd })
@@ -2068,7 +2099,7 @@
       
       setLoader(true, 'Simulating demographic applicant pool feedback...');
       
-      fetch(`http://localhost:${API_PORT}/api/simulate`, {
+      fetch(getApiUrl('/api/simulate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jd: text })
@@ -2167,7 +2198,7 @@
       
       setLoader(true, 'Compiling executive PDF report...');
       
-      fetch(`http://localhost:${API_PORT}/api/pdf`, {
+      fetch(getApiUrl('/api/pdf'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
